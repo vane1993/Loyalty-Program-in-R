@@ -1,0 +1,145 @@
+---
+title: "Loyalty Program"
+author: "Vanesa Lopez"
+date: "3/10/2020"
+output: pdf_document
+  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data preparation
+```{r message-FALSE}
+
+data <- read.csv("~/Downloads/test_loyalty (2) (2) (1).csv")
+head(data)
+summary(data)
+data$use_loyalty <- as.character(data$use_loyalty)
+
+data$use_loyalty[data$use_loyalty == "f"]  <- 0
+data$use_loyalty[data$use_loyalty == "t"]  <- 1
+data$use_loyalty <-as.numeric(data$use_loyalty)
+
+```
+
+```{r message=FALSE}
+# Date conversion
+library(lubridate)
+data[ , 1 ] <- ymd(data[, 1])
+
+# Ordering dataset by Date.
+newdata <- data[order(data$purchase_date, decreasing = FALSE),] 
+tail(newdata)
+
+```
+
+## Use of loyalty over the months
+The usage of the loyalty program has been increasing from October 2019 to January 2020 which means that our users are taking advantage of the deals as we can confirm by having a look at the graph.
+```{r message=FALSE}
+
+library(dplyr)
+library(ggplot2)
+data_loyalty <- newdata[newdata$use_loyalty == 1,]
+df_data_loyalty <- data_loyalty[,c(1,7)]
+
+loyalty_by_date <- df_data_loyalty  %>% group_by(month=floor_date(purchase_date, "month")) %>%
+  summarize(use_loyalty=sum(use_loyalty))
+
+use_of_loyalty <- ggplot(data=loyalty_by_date, aes(x=month, y=use_loyalty))
+use_of_loyalty  + geom_line(color="blue") +
+  geom_point( size=2, shape=21, fill="white", colour="blue") + 
+  theme_minimal()
+```
+
+Let's have a look at the relantionship between revenue and loyalty for each customer over the entired period. As we can see in the table, those customers that present a higher revenue also make a higher use of the loyalty program.
+
+```{r}
+
+df_frequent_buyers <- newdata[,c(3,5,7)]
+big_buyers <- aggregate(. ~ user_id, df_frequent_buyers, sum)
+
+# Sort by revenue
+big_buyers <- big_buyers[order(big_buyers$revenue, decreasing = TRUE),] 
+head(big_buyers,10)
+
+```
+
+
+## Trend in the use of loyalty 
+By analysing the trend of the usage of loyalty over the months it is possible to notice that the biggest peaks occured at the end of november, end of december and early January. These dates coincide with important holidays in Spain. Hence, people tend to use the discount coupons more often during holidays since they have more time to invest in their leisure.
+
+```{r}
+loyalty_by_date <- aggregate(df_data_loyalty["use_loyalty"], by=df_data_loyalty["purchase_date"], sum)
+use_of_loyalty <- ggplot(data=loyalty_by_date, aes(x=purchase_date, y=use_loyalty))
+use_of_loyalty  + geom_line(color="blue") 
+```
+
+
+## Returning customers
+By analyzing the retention of the customers is possible to assess the performance of the loyalty program and to discover frequent buyers so that the company can offer them special promotions as a reward. 
+To calculate the returning customer I calculated the date of first engagement at every row for each customer for the whole dataset. This will determine whether they were a new customer or a returning customer at that point in time. To categorize each customer as "New" or "Returning" I substracted the "purchase date" from the "date_of_first_engagement" so if "purchase_date" is equal to the first date of engagement that means he is a new customer.
+
+```{r}
+
+repurchasing_customers <- newdata[,c(1,3,5)]
+repurchasing_customers <- repurchasing_customers[order(repurchasing_customers$revenue, decreasing = TRUE),]
+
+
+repurchasing_customers <- repurchasing_customers %>%
+  group_by(user_id)%>%
+  mutate(date_of_first_engagement=min(purchase_date))%>%
+  ungroup()
+
+repurchasing_customers  <- repurchasing_customers %>%
+  mutate(Customer_Status = case_when(purchase_date >date_of_first_engagement ~ "Returning",
+                                     purchase_date  == date_of_first_engagement ~ "New",
+                                     TRUE ~ "Other"))
+repurchasing_customers
+
+```
+
+
+Let's see how many "New" and " Returning" customers we have per month.
+
+```{r}
+
+Customers <-  repurchasing_customers%>%
+  group_by(floor_date(purchase_date,unit = 'month'))%>%
+  summarise(New_Customers = n_distinct(user_id[Customer_Status=="New"]),
+Returning_Customers= n_distinct(user_id[Customer_Status=="Returning"]))
+Customers$`floor_date(purchase_date, unit = "month")`
+Customers <- as.data.frame(Customers)
+colnames(Customers)[1]<-"Date_purchase"
+Customers 
+
+```
+
+
+In the following plot we can see a representation between "New" and " Returning" customers. The blue line represents New Customers while the black one represents Returning Customers. As we can see there is room for improvement regarding the loyalty program, since the aim of the company is to transform all the new customer into Returning Customer. 
+
+```{r}
+
+customers_plot <- ggplot(data=Customers, aes(x=Date_purchase, y=New_Customers)) + 
+  geom_line(color="blue") 
+customers_plot <- customers_plot + geom_line(aes( y=Returning_Customers))
+# axes label
+customers_plot <- customers_plot + xlab("Date of Purchase") +
+  ylab("Customers")
+
+# label formating
+customers_plot <- customers_plot + xlab("Date of Purchase") +
+  ylab("Customers") +
+  ggtitle("New/Returning Customers") +
+  theme(axis.title.x = element_text(colour="Black", size = 10),
+        axis.title.y = element_text(colour = "Black", size=10),
+        axis.text.x = element_text(size = 10),
+        axis.text.y  = element_text(size = 10))
+customers_plot
+```
+
+As conclusion, even though the loyalty program presents a positive trend given that users have increased the amount of discount coupons they use since October 2019, the company can increase a lot the rate of users that use the loyalty program. These are good news for the company since they have a big potential market to reach. 
+We can see from the above-mentioned graphs that the company has a lot of new customers every month, but few of them return to the app in the following months. One reason that can explain this fact is that users may sign in for a specific event they know about but they do not engage with the app after that event passed. After all, the company has a lot of new customers to reach which means a big market to address.
+
+
